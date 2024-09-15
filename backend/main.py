@@ -11,7 +11,6 @@ from openai import OpenAI
 from pdf2image import convert_from_bytes
 import io
 import logging
-import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -119,11 +118,6 @@ async def get_models(provider: str):
     else:
         raise HTTPException(status_code=400, detail="Invalid provider")
 
-def custom_json_format(json_str):
-    # Add a newline after each closing curly brace, except the last one
-    formatted = re.sub(r'}(?!}*$)', '}\n', json_str)
-    return formatted
-
 @app.post("/ocr")
 async def process_ocr(
     files: List[UploadFile] = File(...), 
@@ -173,25 +167,20 @@ async def process_ocr(
             "files": all_json_data
         }
 
-        # Convert to JSON string without any formatting
-        json_str = json.dumps(merged_json_data, ensure_ascii=False, separators=(',', ':'))
-
-        # Apply custom formatting
-        formatted_json = custom_json_format(json_str)
-
-        # Create a bytes IO object
-        json_bytes = io.BytesIO(formatted_json.encode('utf-8'))
-
-        # Create a response with the formatted JSON
-        response = Response(content=json_bytes.getvalue(), media_type="application/json")
-        
-        # Set headers to force download
-        response.headers["Content-Disposition"] = f"attachment; filename=ocr_output.json"
-        response.headers["Content-Type"] = "application/json; charset=utf-8"
+        if output_format == "json":
+            output = json.dumps(merged_json_data, indent=2, ensure_ascii=False)
+            media_type = "application/json"
+        else:
+            output = json.dumps(merged_json_data, indent=2, ensure_ascii=False)
+            media_type = "text/plain"
 
         logger.info("OCR processing completed successfully")
-        return response
+        return JSONResponse(content=json.loads(output), media_type=media_type)
 
     except Exception as e:
         logger.error(f"Error in process_ocr: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8300)
