@@ -162,26 +162,25 @@ async def process_ocr(
                 
                 all_json_data.append({"filename": file.filename, "content": json_data})
 
-       # Merge all JSON data
+        # Merge all JSON data
         merged_json_data = {
             "files": all_json_data
         }
 
-        if output_format == "json":
-            output = json.dumps(merged_json_data, indent=2, ensure_ascii=False)
-            media_type = "application/json"
-        else:
-            output = json.dumps(merged_json_data, indent=2, ensure_ascii=False)
-            media_type = "text/plain"
+        # Format the JSON with indentation
+        formatted_json = json.dumps(merged_json_data, indent=2, ensure_ascii=False)
+
+        # Create a bytes IO object
+        json_bytes = io.BytesIO(formatted_json.encode('utf-8'))
+
+        # Create a response with the formatted JSON
+        response = Response(content=json_bytes.getvalue(), media_type="application/json")
+        
+        # Set headers to force download
+        response.headers["Content-Disposition"] = f"attachment; filename=ocr_output.json"
+        response.headers["Content-Type"] = "application/json; charset=utf-8"
 
         logger.info("OCR processing completed successfully")
-        
-        # Create a Response object with formatted JSON
-        response = JSONResponse(content=json.loads(output), media_type=media_type)
-        
-        # Set content disposition to force download
-        response.headers["Content-Disposition"] = f"attachment; filename=ocr_output.{output_format}"
-        
         return response
 
     except Exception as e:
