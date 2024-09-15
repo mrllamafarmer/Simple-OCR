@@ -162,7 +162,7 @@ async def process_ocr(
                 
                 all_json_data.append({"filename": file.filename, "content": json_data})
 
-        # Merge all JSON data
+       # Merge all JSON data
         merged_json_data = {
             "files": all_json_data
         }
@@ -175,7 +175,14 @@ async def process_ocr(
             media_type = "text/plain"
 
         logger.info("OCR processing completed successfully")
-        return JSONResponse(content=json.loads(output), media_type=media_type)
+        
+        # Create a Response object with formatted JSON
+        response = JSONResponse(content=json.loads(output), media_type=media_type)
+        
+        # Set content disposition to force download
+        response.headers["Content-Disposition"] = f"attachment; filename=ocr_output.{output_format}"
+        
+        return response
 
     except Exception as e:
         logger.error(f"Error in process_ocr: {str(e)}")
