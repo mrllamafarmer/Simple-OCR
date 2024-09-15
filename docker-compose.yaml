@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8300:8300"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    env_file:
+      - ./.env      
+    networks:
+      - app-network
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3300:3300"
+    networks:
+      - app-network
+    environment:
+      - REACT_APP_API_URL=http://backend:8300  # For inter-container communication
+      - REACT_APP_EXTERNAL_API_URL=http://localhost:8300  # For external access
+
+networks:
+  app-network:
+    driver: bridge
