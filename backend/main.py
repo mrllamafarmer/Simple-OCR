@@ -11,6 +11,7 @@ from openai import OpenAI
 from pdf2image import convert_from_bytes
 import io
 import logging
+import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -118,6 +119,13 @@ async def get_models(provider: str):
     else:
         raise HTTPException(status_code=400, detail="Invalid provider")
 
+
+def custom_json_format(json_str):
+    # Add a newline after each closing curly brace, except the last one
+    formatted = re.sub(r'}(?!}*$)', '}\n', json_str)
+    return formatted
+
+
 @app.post("/ocr")
 async def process_ocr(
     files: List[UploadFile] = File(...), 
@@ -153,30 +161,8 @@ async def process_ocr(
                     # Merge page_json_data into pdf_json_data
                     for key, value in page_json_data.items():
                         if key in pdf_json_data:
-                            if isinstance(pdf_json_data[key], dict) and isinstance(value, dict):
-                                # Merge dictionaries
-                                for sub_key, sub_value in value.items():
-                                    if sub_key in pdf_json_data[key]:
-                                        if isinstance(pdf_json_data[key][sub_key], str) and isinstance(sub_value, str):
-                                            # Concatenate strings, removing any trailing punctuation from the previous page
-                                            pdf_json_data[key][sub_key] = pdf_json_data[key][sub_key].rstrip('.,!?') + ' ' + sub_value.lstrip()
-                                        elif isinstance(pdf_json_data[key][sub_key], list):
-                                            if isinstance(sub_value, list):
-                                                pdf_json_data[key][sub_key].extend(sub_value)
-                                            else:
-                                                pdf_json_data[key][sub_key].append(sub_value)
-                                        else:
-                                            pdf_json_data[key][sub_key] = [pdf_json_data[key][sub_key], sub_value]
-                                    else:
-                                        pdf_json_data[key][sub_key] = sub_value
-                            elif isinstance(pdf_json_data[key], list):
-                                if isinstance(value, list):
-                                    pdf_json_data[key].extend(value)
-                                else:
-                                    pdf_json_data[key].append(value)
-                            elif isinstance(pdf_json_data[key], str) and isinstance(value, str):
-                                # Concatenate strings, removing any trailing punctuation from the previous page
-                                pdf_json_data[key] = pdf_json_data[key].rstrip('.,!?') + ' ' + value.lstrip()
+                            if isinstance(pdf_json_data[key], list):
+                                pdf_json_data[key].extend(value if isinstance(value, list) else [value])
                             else:
                                 pdf_json_data[key] = [pdf_json_data[key], value]
                         else:
