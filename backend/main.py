@@ -136,20 +136,53 @@ async def process_ocr(
             if file.filename.lower().endswith('.pdf'):
                 logger.info(f"Converting PDF to images: {file.filename}")
                 images = convert_from_bytes(file_content)
-                for i, image in enumerate(images):
+                pdf_json_data = {}
+                for image in images:
                     image_bytes = io.BytesIO()
                     image.save(image_bytes, format='JPEG')
                     image_bytes = image_bytes.getvalue()
                     
-                    logger.info(f"Processing PDF page {i+1} with {provider}")
+                    logger.info(f"Processing PDF page with {provider}")
                     if provider == "OpenAI":
-                        json_data = process_image_openai(image_bytes, model)
+                        page_json_data = process_image_openai(image_bytes, model)
                     elif provider == "OpenRouter":
-                        json_data = process_image_openrouter(image_bytes, model)
+                        page_json_data = process_image_openrouter(image_bytes, model)
                     else:
                         raise ValueError(f"Unsupported provider: {provider}")
                     
-                    all_json_data.append({"filename": file.filename, "page": i+1, "content": json_data})
+                    # Merge page_json_data into pdf_json_data
+                    for key, value in page_json_data.items():
+                        if key in pdf_json_data:
+                            if isinstance(pdf_json_data[key], dict) and isinstance(value, dict):
+                                # Merge dictionaries
+                                for sub_key, sub_value in value.items():
+                                    if sub_key in pdf_json_data[key]:
+                                        if isinstance(pdf_json_data[key][sub_key], str) and isinstance(sub_value, str):
+                                            # Concatenate strings, removing any trailing punctuation from the previous page
+                                            pdf_json_data[key][sub_key] = pdf_json_data[key][sub_key].rstrip('.,!?') + ' ' + sub_value.lstrip()
+                                        elif isinstance(pdf_json_data[key][sub_key], list):
+                                            if isinstance(sub_value, list):
+                                                pdf_json_data[key][sub_key].extend(sub_value)
+                                            else:
+                                                pdf_json_data[key][sub_key].append(sub_value)
+                                        else:
+                                            pdf_json_data[key][sub_key] = [pdf_json_data[key][sub_key], sub_value]
+                                    else:
+                                        pdf_json_data[key][sub_key] = sub_value
+                            elif isinstance(pdf_json_data[key], list):
+                                if isinstance(value, list):
+                                    pdf_json_data[key].extend(value)
+                                else:
+                                    pdf_json_data[key].append(value)
+                            elif isinstance(pdf_json_data[key], str) and isinstance(value, str):
+                                # Concatenate strings, removing any trailing punctuation from the previous page
+                                pdf_json_data[key] = pdf_json_data[key].rstrip('.,!?') + ' ' + value.lstrip()
+                            else:
+                                pdf_json_data[key] = [pdf_json_data[key], value]
+                        else:
+                            pdf_json_data[key] = value
+                
+                all_json_data.append({"filename": file.filename, "content": pdf_json_data})
             else:
                 image_bytes = file_content
                 logger.info(f"Processing image with {provider}: {file.filename}")
@@ -167,15 +200,24 @@ async def process_ocr(
             "files": all_json_data
         }
 
-        if output_format == "json":
-            output = json.dumps(merged_json_data, indent=2, ensure_ascii=False)
-            media_type = "application/json"
-        else:
-            output = json.dumps(merged_json_data, indent=2, ensure_ascii=False)
-            media_type = "text/plain"
+        # Convert to JSON string without any formatting
+        json_str = json.dumps(merged_json_data, ensure_ascii=False, separators=(',', ':'))
+
+        # Apply custom formatting
+        formatted_json = custom_json_format(json_str)
+
+        # Create a bytes IO object
+        json_bytes = io.BytesIO(formatted_json.encode('utf-8'))
+
+        # Create a response with the formatted JSON
+        response = Response(content=json_bytes.getvalue(), media_type="application/json")
+        
+        # Set headers to force download
+        response.headers["Content-Disposition"] = f"attachment; filename=ocr_output.json"
+        response.headers["Content-Type"] = "application/json; charset=utf-8"
 
         logger.info("OCR processing completed successfully")
-        return JSONResponse(content=json.loads(output), media_type=media_type)
+        return response
 
     except Exception as e:
         logger.error(f"Error in process_ocr: {str(e)}")
