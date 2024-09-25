@@ -113,9 +113,9 @@ def process_image_openrouter(image_bytes, model):
 @app.get("/models/{provider}")
 async def get_models(provider: str):
     if provider == "OpenAI":
-        return ["gpt-4o-mini-2024-07-18", "gpt-4o-2024-08-06"]
+        return ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo"]
     elif provider == "OpenRouter":
-        return ["openai/chatgpt-4o-latest", "openai/gpt-4o-mini-2024-07-18","mistralai/pixtral-12b:free","meta-llama/llama-3.1-405b","google/gemini-pro-vision"]
+        return ["openai/chatgpt-4o-2024-08-06", "openai/gpt-4o-mini", "mistralai/pixtral-12b:free", "anthropic/claude-3.5-sonnet", "google/gemini-flash-8b-1.5-exp", "google/gemini-pro-1.5-exp", "google/gemini-pro-vision"]
     else:
         raise HTTPException(status_code=400, detail="Invalid provider")
 
