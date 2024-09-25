@@ -113,18 +113,16 @@ def process_image_openrouter(image_bytes, model):
 @app.get("/models/{provider}")
 async def get_models(provider: str):
     if provider == "OpenAI":
-        return ["gpt-4o-mini-2024-07-18", "chatgpt-4o-latest"]
+        return ["gpt-4o-mini-2024-07-18", "gpt-4o-2024-08-06"]
     elif provider == "OpenRouter":
         return ["openai/chatgpt-4o-latest", "openai/gpt-4o-mini-2024-07-18","mistralai/pixtral-12b:free","meta-llama/llama-3.1-405b","google/gemini-pro-vision"]
     else:
         raise HTTPException(status_code=400, detail="Invalid provider")
 
-
 def custom_json_format(json_str):
     # Add a newline after each closing curly brace, except the last one
     formatted = re.sub(r'}(?!}*$)', '}\n', json_str)
     return formatted
-
 
 @app.post("/ocr")
 async def process_ocr(
@@ -136,6 +134,21 @@ async def process_ocr(
     try:
         logger.info(f"Received OCR request: provider={provider}, model={model}, output_format={output_format}")
         
+        def merge_json(existing, new):
+            if isinstance(existing, dict) and isinstance(new, dict):
+                for key, value in new.items():
+                    if key in existing:
+                        existing[key] = merge_json(existing[key], value)
+                    else:
+                        existing[key] = value
+                return existing
+            elif isinstance(existing, list) and isinstance(new, list):
+                return existing + new
+            elif isinstance(existing, str) and isinstance(new, str):
+                return existing.rstrip('.,!?') + ' ' + new.lstrip()
+            else:
+                return new
+
         all_json_data = []
         
         for file in files:
@@ -159,14 +172,7 @@ async def process_ocr(
                         raise ValueError(f"Unsupported provider: {provider}")
                     
                     # Merge page_json_data into pdf_json_data
-                    for key, value in page_json_data.items():
-                        if key in pdf_json_data:
-                            if isinstance(pdf_json_data[key], list):
-                                pdf_json_data[key].extend(value if isinstance(value, list) else [value])
-                            else:
-                                pdf_json_data[key] = [pdf_json_data[key], value]
-                        else:
-                            pdf_json_data[key] = value
+                    pdf_json_data = merge_json(pdf_json_data, page_json_data)
                 
                 all_json_data.append({"filename": file.filename, "content": pdf_json_data})
             else:
